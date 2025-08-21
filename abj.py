@@ -1,3 +1,4 @@
+# --- START OF FILE final.py ---
 
 import logging
 import re
@@ -15,7 +16,7 @@ from telegram.ext import (
 
 # --- CONFIGURATION (MODIFIED FOR MULTI-ADMIN) ---
 BOT_TOKEN = os.environ['BOT_TOKEN']
-# Read admin IDs as a comma-separated list
+# Read admin IDs from environment variables as a comma-separated list
 ADMIN_IDS = os.environ.get('ADMIN_IDS', '').split(',')
 CHANNEL_ID = os.environ['CHANNEL_ID']
 USER_DATA_CHANNEL_ID = os.environ['USER_DATA_CHANNEL_ID']
@@ -30,15 +31,13 @@ PAYMENT_INSTRUCTIONS = (
     "Then, upload a clear screenshot of the receipt below."
 )
 
-# --- BOT TEXTS (Updated) ---
+# --- BOT TEXTS ---
 CONTACT_TEXT = (
     "📞 *Contact Support*\n\n"
     "If you have any issues, please contact the admin directly:\n\n"
     "👤 *Telegram:* @Mejido\n"
     "📱 *Phone:* `0927429565`"
 )
-
-
 
 HELP_TEXT = (
     "🤝 *How to Get Access*\n\n"
@@ -59,7 +58,7 @@ logger = logging.getLogger(__name__)
 # Define states for the conversation
 GET_NAME, GET_SEX, GET_PHOTO = range(3)
 
-# --- NEW: Admin check helper function ---
+# --- Admin check helper function ---
 def is_admin(user_id: int) -> bool:
     """Checks if a user ID belongs to an admin."""
     return str(user_id) in ADMIN_IDS
@@ -71,13 +70,13 @@ def get_admin_keyboard(context: ContextTypes.DEFAULT_TYPE) -> ReplyKeyboardMarku
     keyboard = [[toggle_text], ["✅ Approved Users", "❌ Rejected Users"]]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-user_keyboard = [[ "Help", " Start Payment"], [" Contact"]]
+# CORRECTED: Removed leading spaces from button text
+user_keyboard = [["Help", "Start Payment"], ["Contact"]]
 submission_keyboard = [["❌ Cancel"]]
 
 # --- Main /start & Menu Button Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    # MODIFIED: Use the new is_admin function
     if is_admin(user.id):
         await update.message.reply_markdown( f"*Welcome Admin*, {user.first_name}", reply_markup=get_admin_keyboard(context))
     else:
@@ -92,7 +91,6 @@ async def show_contact(update: Update, context: ContextTypes.DEFAULT_TYPE): awai
 
 # --- Admin Panel Functions ---
 async def toggle_mode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # MODIFIED: Use the new is_admin function
     if not is_admin(update.effective_user.id): return
     is_manual = context.bot_data.get('is_manual_mode', True)
     context.bot_data['is_manual_mode'] = not is_manual
@@ -100,23 +98,19 @@ async def toggle_mode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await update.message.reply_markdown(mode_text, reply_markup=get_admin_keyboard(context))
 
 async def show_approved_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # MODIFIED: Use the new is_admin function
     if not is_admin(update.effective_user.id): return
     approved = context.bot_data.get('approved_users', [])
     if not approved: return await update.message.reply_text("There are no approved users in the history yet.")
     await update.message.reply_markdown(f"*--- History: {len(approved)} Approved User(s) ---*")
     for user_data in approved:
-        # MODIFIED: Send to the admin who requested, not a hardcoded ID
         await context.bot.send_photo(update.effective_user.id, user_data['photo_id'], caption=f"✅ Name: {user_data['full_name']}\n🔗 Username: {user_data['username']}")
 
 async def show_rejected_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # MODIFIED: Use the new is_admin function
     if not is_admin(update.effective_user.id): return
     rejected = context.bot_data.get('rejected_users', [])
     if not rejected: return await update.message.reply_text("There are no rejected users in the history yet.")
     await update.message.reply_markdown(f"*--- History: {len(rejected)} Rejected User(s) ---*")
     for user_data in rejected:
-        # MODIFIED: Send to the admin who requested, not a hardcoded ID
         await context.bot.send_photo(update.effective_user.id, user_data['photo_id'], caption=f"❌ Name: {user_data['full_name']}\n🔗 Username: {user_data['username']}")
 
 # --- User Payment Conversation ---
@@ -163,7 +157,7 @@ async def get_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     is_manual = context.bot_data.get('is_manual_mode', True)
     
-    # MODIFIED: Send notification to all admins
+    # Send notification to all admins
     for admin_id in ADMIN_IDS:
         if not admin_id: continue # Skip if an ID is empty
         try:
@@ -172,21 +166,15 @@ async def get_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                              InlineKeyboardButton("❌ Reject", callback_data=f"reject_manual_{user.id}")]]
                 await context.bot.send_photo(admin_id, submission_data['photo_id'], caption=f"🚨 *Manual Review Request* 🚨\n\n{caption}", parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
             else:
-                # In auto mode, only one admin needs to act. We can keep sending to all.
                 keyboard = [[InlineKeyboardButton("Approve ✅", callback_data=f"approve_auto_{user.id}"), 
                              InlineKeyboardButton("Reject ❌", callback_data=f"reject_auto_{user.id}")]]
                 await context.bot.send_photo(admin_id, submission_data['photo_id'], caption=f"📬 *Auto-Approval Submission*\n\n{caption}", parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
         except Exception as e:
             logger.error(f"Failed to send submission to admin {admin_id}: {e}")
 
-    # No change needed for auto-approve logic, it's user-facing
     if not is_manual:
-        # Note: REQUEST_TO_JOIN_LINK is not defined in your original code.
-        # You need to manually create this link for your channel and add it here.
-        # Example: REQUEST_TO_JOIN_LINK = "https://t.me/joinchat/YourInviteLink"
-        # For now, I will comment it out to prevent an error.
-        # join_button = [[InlineKeyboardButton("➡️ Request to Join Channel", url=REQUEST_TO_JOIN_LINK)]]
-        # await context.bot.send_message(user.id, "Please click the button below to send your join request to the channel.", reply_markup=InlineKeyboardMarkup(join_button))
+        # Note: In Auto-Approve mode, you'd typically have a public channel link or a join request link.
+        # This message informs them to wait for the admin to approve their request in the channel itself.
         await context.bot.send_message(user.id, "Your submission has been sent for review. Please wait for the admin to approve your join request in the channel.")
 
     # After sending, show the main user menu again
@@ -197,7 +185,6 @@ async def get_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     context.user_data.clear()
     return ConversationHandler.END
-
 
 async def cancel_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancels and ends the conversation."""
@@ -222,7 +209,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await query.edit_message_text("--- ⚠️ Action already taken by an admin ---")
         return
 
-    # --- Function to log user data to the specified channel ---
     async def log_user_to_channel(approved_user_data):
         try:
             user_sequence = context.bot_data.get('user_sequence_number', 0) + 1
@@ -242,15 +228,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             )
         except Exception as e:
             logger.error(f"Failed to send user data to log channel: {e}")
-            # Notify admins of the logging failure
             for admin_id in ADMIN_IDS:
                 if not admin_id: continue
                 await context.bot.send_message(admin_id, f"⚠️ ERROR: Could not send approved user data for {approved_user_data['full_name']} to the log channel. Check bot permissions.")
-    # --- END of log function ---
 
     if action == "approve":
         context.bot_data.setdefault('approved_users', []).append(user_data)
-        await log_user_to_channel(user_data) # Log the user data
+        await log_user_to_channel(user_data)
         
         if mode == "manual":
             try:
@@ -270,32 +254,29 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         elif mode == "auto":
             await context.bot.send_message(user_id, "❌ Your join request was denied by the admin.")
 
-    # Update message for the admin who clicked
     await query.message.edit_caption(caption=f"{query.message.caption}\n\n--- Action Taken by {query.from_user.first_name} ---", reply_markup=None)
 
 
 def main() -> None:
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # MODIFIED: Conversation handler to fix the Cancel button
+    # CORRECTED: Conversation handler with fixed regex and cancel logic
     conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex('^ Start Payment$'), start_payment)],
+        entry_points=[MessageHandler(filters.Regex('^Start Payment$'), start_payment)],
         states={
             GET_NAME: [
-                # This now specifically IGNORES the cancel button text
                 MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Regex('^❌ Cancel$'), get_name)
             ],
             GET_SEX: [CallbackQueryHandler(get_sex)],
             GET_PHOTO: [MessageHandler(filters.PHOTO, get_photo)],
         },
-        # This fallback will now correctly catch the cancel button press at any stage
         fallbacks=[MessageHandler(filters.Regex('^❌ Cancel$'), cancel_payment)],
     )
     
-    # Add handlers
+    # Add handlers with corrected regex patterns
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.Regex('^Help$'), show_help))
-    application.add_handler(MessageHandler(filters.Regex('^ Contact$'), show_contact))
+    application.add_handler(MessageHandler(filters.Regex('^Contact$'), show_contact))
     
     # Admin handlers
     application.add_handler(MessageHandler(filters.Regex(r'^(⚙️ Switch to Auto-Approve|⚙️ Switch to Manual Approve)$'), toggle_mode))
